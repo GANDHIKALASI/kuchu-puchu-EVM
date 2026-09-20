@@ -24,7 +24,7 @@ evm-demo/
 ├── styles.css        # Physical hardware styling, animations & responsive layout
 ├── app.js            # EVM state machine, audio playback, VVPAT logic & ringtones
 ├── README.md         # Documentation & instructions
-└── assets/           # Candidate symbols & verification photos
+└── assets/           # Candidate symbols, verification photos & default party audio
     ├── aap.webp
     ├── bjp.webp
     ├── cand1_photo.jpg
@@ -32,7 +32,12 @@ evm-demo/
     ├── cand3_photo.jpg
     ├── cand4_photo.jpg
     ├── cjp.jpg
-    └── congress.webp
+    ├── congress.webp
+    └── sounds/
+        ├── sound_aap.m4a         # Default AAP sound
+        ├── sound_bjp.m4a         # Default BJP sound
+        ├── sound_cjp.mp3         # Default CJP sound
+        └── sound_congress.m4a    # Default Congress sound
 ```
 
 ---

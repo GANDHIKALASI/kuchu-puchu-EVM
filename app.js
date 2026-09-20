@@ -17,7 +17,9 @@ const DEMO_CANDIDATES = [
     symbolName: "Modi Ji",
     braille: [1, 0, 1, 0, 0, 1],
     symbolSvg: `<img src="assets/bjp.webp" alt="BJP" class="cand-symbol-img" />`,
-    photoSrc: "assets/cand1_photo.jpg"
+    photoSrc: "assets/cand1_photo.jpg",
+    defaultAudioSrc: "assets/sounds/sound_bjp.m4a",
+    defaultAudioName: "Modi Ji Speech"
   },
   {
     id: 2,
@@ -27,7 +29,9 @@ const DEMO_CANDIDATES = [
     symbolName: "Rahul Gandhi",
     braille: [1, 1, 0, 0, 1, 0],
     symbolSvg: `<img src="assets/congress.webp" alt="Congress" class="cand-symbol-img" />`,
-    photoSrc: "assets/cand2_photo.jpg"
+    photoSrc: "assets/cand2_photo.jpg",
+    defaultAudioSrc: "assets/sounds/sound_congress.m4a",
+    defaultAudioName: "Rahul Gandhi Khata Khat"
   },
   {
     id: 3,
@@ -37,7 +41,9 @@ const DEMO_CANDIDATES = [
     symbolName: "Kejuu",
     braille: [1, 0, 0, 1, 1, 0],
     symbolSvg: `<img src="assets/aap.webp" alt="Aam Aadmi Party" class="cand-symbol-img" />`,
-    photoSrc: "assets/cand3_photo.jpg"
+    photoSrc: "assets/cand3_photo.jpg",
+    defaultAudioSrc: "assets/sounds/sound_aap.m4a",
+    defaultAudioName: "Kejriwal Speech"
   },
   {
     id: 4,
@@ -47,7 +53,9 @@ const DEMO_CANDIDATES = [
     symbolName: "Abhijeet",
     braille: [1, 0, 1, 1, 0, 0],
     symbolSvg: `<img src="assets/cjp.jpg" alt="Cockroach janta Party" class="cand-symbol-img" />`,
-    photoSrc: "assets/cand4_photo.jpg"
+    photoSrc: "assets/cand4_photo.jpg",
+    defaultAudioSrc: "assets/sounds/sound_cjp.mp3",
+    defaultAudioName: "CJP by Dharmendra"
   }
 ];
 
@@ -62,6 +70,20 @@ class EvmSimulation {
     this.audioCtx = null;
     this.xrayActive = false;
     this.activeVoteTimeout = null;
+
+    // Default party-specific audio { [candidateId]: { url, name, element } }
+    this.defaultAudios = {};
+    DEMO_CANDIDATES.forEach(cand => {
+      if (cand.defaultAudioSrc) {
+        const audio = new Audio(cand.defaultAudioSrc);
+        audio.preload = 'auto';
+        this.defaultAudios[cand.id] = {
+          url: cand.defaultAudioSrc,
+          name: cand.defaultAudioName,
+          element: audio
+        };
+      }
+    });
 
     // Candidate-specific custom ringtones { [candidateId]: { url, name, element } }
     this.candidateAudios = {
@@ -111,12 +133,22 @@ class EvmSimulation {
         }
       }
 
-      // Backward compatibility: if previous single audio exists and Candidate 1 has no custom audio
-      const legacyAudio = localStorage.getItem('KP_CUSTOM_AUDIO_DATA');
-      const legacyName = localStorage.getItem('KP_CUSTOM_AUDIO_NAME');
-      if (legacyAudio && !this.candidateAudios[1]) {
-        this.setCandidateAudio(1, legacyAudio, legacyName || 'Custom Audio (Migrated)', true);
+      // Update global badge & initial labels for non-custom candidates
+      for (let cid = 1; cid <= 4; cid++) {
+        if (!this.candidateAudios[cid] && this.candSoundCols[cid]) {
+          const col = this.candSoundCols[cid];
+          const defName = this.defaultAudios[cid]?.name || "Factory Beep";
+          if (col.metaDesc) {
+            col.metaDesc.textContent = defName;
+            col.metaDesc.title = `Default: ${defName}`;
+          }
+          if (col.badge) {
+            col.badge.textContent = "DEFAULT";
+            col.badge.classList.remove('active-custom');
+          }
+        }
       }
+      this.updateGlobalAudioBadge();
     } catch (e) {
       console.warn("Storage read failed, using memory state", e);
     }
@@ -242,7 +274,7 @@ class EvmSimulation {
   playEvmBeep(candidateId = null) {
     if (!this.audioEnabled) return;
 
-    // If candidateId is provided and candidate has a custom audio set, play it
+    // 1. If candidateId is provided and candidate has a custom audio set, play it
     if (candidateId && this.candidateAudios[candidateId]?.element) {
       try {
         const audio = this.candidateAudios[candidateId].element;
@@ -251,8 +283,8 @@ class EvmSimulation {
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise.catch(err => {
-            console.warn(`Candidate ${candidateId} audio playback failed, falling back to synthesizer`, err);
-            this.playDefaultSyntheticBeep();
+            console.warn(`Candidate ${candidateId} audio playback failed, falling back to default party sound`, err);
+            this.playCandidateDefaultAudio(candidateId);
           });
         }
         return;
@@ -261,7 +293,36 @@ class EvmSimulation {
       }
     }
 
-    // Default factory electronic EVM tone
+    // 2. If candidateId has a default party sound configured, play it
+    if (candidateId && this.defaultAudios[candidateId]?.element) {
+      this.playCandidateDefaultAudio(candidateId);
+      return;
+    }
+
+    // 3. Fallback: Default factory electronic EVM tone
+    this.playDefaultSyntheticBeep();
+  }
+
+  playCandidateDefaultAudio(candidateId) {
+    if (!this.audioEnabled) return;
+    const def = this.defaultAudios[candidateId];
+    if (def && def.element) {
+      try {
+        const audio = def.element;
+        audio.pause();
+        audio.currentTime = 0;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(err => {
+            console.warn(`Candidate ${candidateId} default party audio failed, falling back to synthesizer`, err);
+            this.playDefaultSyntheticBeep();
+          });
+        }
+        return;
+      } catch (e) {
+        console.warn(`Default candidate audio error`, e);
+      }
+    }
     this.playDefaultSyntheticBeep();
   }
 
@@ -388,8 +449,9 @@ class EvmSimulation {
         col.metaDot.classList.add('active-default');
       }
       if (col.metaDesc) {
-        col.metaDesc.textContent = "Factory Beep";
-        col.metaDesc.title = "Factory Beep (1320 Hz)";
+        const defName = this.defaultAudios[cid]?.name || "Factory Beep";
+        col.metaDesc.textContent = defName;
+        col.metaDesc.title = `Default: ${defName}`;
       }
       if (col.btnReset) {
         col.btnReset.classList.add('hidden');
@@ -397,14 +459,14 @@ class EvmSimulation {
     }
 
     this.updateGlobalAudioBadge();
-    this.playDefaultSyntheticBeep();
+    this.playCandidateDefaultAudio(cid);
   }
 
   updateGlobalAudioBadge() {
     if (!this.ringtoneGlobalBadge) return;
     const customCount = [1, 2, 3, 4].filter(id => this.candidateAudios[id] !== null).length;
     if (customCount === 0) {
-      this.ringtoneGlobalBadge.textContent = "FACTORY BEEPS ACTIVE";
+      this.ringtoneGlobalBadge.textContent = "PARTY DEFAULT SOUNDS ACTIVE";
       this.ringtoneGlobalBadge.classList.remove('custom-active');
     } else {
       this.ringtoneGlobalBadge.textContent = `${customCount}/4 CUSTOM TONES ACTIVE`;
